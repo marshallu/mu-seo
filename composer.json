@@ -1,10 +1,19 @@
 {
 	"name": "marshallu/mu-seo",
-	"description": "This is a lean SEO plugin for Marshall University.",
-	"keywords": ["wordpress", "plugin"],
+	"description": "A lean SEO plugin for Marshall University WordPress sites.",
+	"keywords": ["wordpress", "plugin", "seo"],
 	"homepage": "https://github.com/marshallu/mu-seo",
 	"license": "MIT",
+	"authors": [
+		{
+			"name": "Christopher McComas",
+			"email": "chris@example.com"
+		}
+	],
 	"type": "wordpress-plugin",
+	"require": {
+		"php": ">=8.3"
+	},
 	"require-dev": {
 		"squizlabs/php_codesniffer": "@stable",
 		"wp-coding-standards/wpcs": "^3.1",

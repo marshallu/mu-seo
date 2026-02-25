@@ -1,9 +1,9 @@
 # MU SEO
 
-A lean, internal SEO plugin for Marshall University's WordPress network.
+A lean SEO plugin for Marshall University's WordPress sites.
 
 - **Package:** `marshallu/mu-seo`
-- **Type:** WordPress MU (must-use) plugin
+- **Type:** WordPress plugin
 - **Requires:** ACF Pro
 
 ---
@@ -24,15 +24,31 @@ A lean, internal SEO plugin for Marshall University's WordPress network.
 
 ## Installation
 
-Drop the plugin directory into `wp-content/mu-plugins/`. It loads automatically as a must-use plugin — no activation step required.
+### Manual Installation
+
+Upload the plugin directory to `wp-content/plugins/` and activate it from the WordPress admin.
 
 ```
 wp-content/
-└── mu-plugins/
+└── plugins/
     └── mu-seo/
         ├── mu-seo.php
         └── includes/
             └── ...
+```
+
+Then go to **Plugins** in the WordPress admin and activate **MU SEO**.
+
+### Composer Installation
+
+```bash
+composer require marshallu/mu-seo
+```
+
+Composer will install the plugin to `wp-content/plugins/mu-seo/`. Activate it from the WordPress admin or via WP-CLI:
+
+```bash
+wp plugin activate mu-seo
 ```
 
 Composer dependencies (PHPCS, WPCS, ACF stubs) are dev-only and not required in production.
