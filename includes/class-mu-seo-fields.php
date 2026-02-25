@@ -61,7 +61,7 @@ class MU_SEO_Fields {
 						'label'             => 'Canonical URL',
 						'name'              => 'mu_seo_canonical',
 						'type'              => 'url',
-						'instructions'      => 'Leave blank to use the default URL for this post.',
+						'instructions'      => 'The canonical URL tells search engines which version of this page is the "official" one. Use this field if the same content appears at multiple URLs (e.g. paginated pages, print views, or syndicated content) to avoid duplicate content penalties. Leave blank to use the default URL for this post.',
 						'required'          => 0,
 						'placeholder'       => '',
 					),
