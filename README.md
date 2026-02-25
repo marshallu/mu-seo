@@ -17,6 +17,8 @@ A lean, internal SEO plugin for Marshall University's WordPress network.
 - Site-wide options page for Twitter handle and default social image
 - JSON-LD schema markup for posts (Article) and pages (WebPage)
 - `mu_seo_schema` filter for adding or modifying schema on custom post types
+- `mu_seo_og_type` filter for overriding the OG type on custom post types
+- Yoast SEO migration tool (WP-CLI command + admin UI)
 
 ---
 
@@ -55,7 +57,7 @@ All per-post fields appear in the **SEO** meta box on every public post type edi
 | Field | ACF Name | Type | Notes |
 |---|---|---|---|
 | Social Image | `mu_seo_og_image` | Image (returns ID) | Overrides the image used in og:image and Twitter card. See fallback chain below. |
-| OG Type | `mu_seo_og_type` | Select | `article` (default) or `website`. Use `website` for the homepage or section landing pages. |
+| OG Type | `mu_seo_og_type` | Select | `article` or `website`. When left blank, defaults to `article` for posts and `website` for all other post types. Can be overridden per post type via the `mu_seo_og_type` filter. |
 | Twitter Card Style | `mu_seo_twitter_card` | Select | `summary_large_image` (default) or `summary`. |
 
 ### Options Page
@@ -97,7 +99,9 @@ The plugin parses the `acf/hero` block's saved `attrs.data` to find the image ID
 
 The following tags are output in `wp_head` on singular pages only. Nothing is output on archives, the home page, or 404s.
 
-### Meta Tags (`MU_SEO_Head`, priority default)
+WordPress core's `rel_canonical` hook is removed — the canonical link is managed entirely by MU SEO.
+
+### Meta Tags (`MU_SEO_Head`, priority 2)
 
 ```html
 <meta name="description" content="...">
@@ -196,6 +200,32 @@ add_filter( 'mu_seo_post_types', function( $post_types ) {
 
 ---
 
+### `mu_seo_og_type`
+
+Filters the default `og:type` for the current post. Runs only when the per-post ACF field is blank. Use this to assign the correct OG type to custom post types without editing MU SEO directly.
+
+Valid OG types include `article`, `website`, and `profile`. See [ogp.me](https://ogp.me/#types) for the full list.
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `$type` | `string` | The default type. `article` for posts, `website` for everything else. |
+| `$post_id` | `int` | The current post ID. |
+
+**Example** — set `profile` for a people/profiles CPT:
+
+```php
+add_filter( 'mu_seo_og_type', function( $type, $post_id ) {
+    if ( is_singular( 'mu_profile' ) ) {
+        return 'profile';
+    }
+    return $type;
+}, 10, 2 );
+```
+
+---
+
 ### `mu_seo_schema`
 
 Filters the JSON-LD schema array before it is encoded and output. Runs on every singular page. For unhandled post types (not `post` or `page`) the initial `$schema` value is an empty array, giving you a clean slate to build from.
@@ -254,6 +284,88 @@ add_filter( 'mu_seo_schema', function( $schema, $post_id, $post_type ) {
 
 ---
 
+## Yoast SEO Migration
+
+MU SEO includes a migration tool for moving Yoast SEO post meta and global options into MU SEO's ACF fields. Existing MU SEO values are never overwritten.
+
+### What gets migrated
+
+**Per-post meta:**
+
+| Yoast meta key | MU SEO field |
+|---|---|
+| `_yoast_wpseo_title` | `mu_seo_title` |
+| `_yoast_wpseo_metadesc` | `mu_seo_description` |
+| `_yoast_wpseo_canonical` | `mu_seo_canonical` |
+| `_yoast_wpseo_meta-robots-noindex` / `nofollow` | `mu_seo_robots` |
+| `_yoast_wpseo_opengraph-image-id` | `mu_seo_og_image` |
+
+Values containing Yoast template variables (`%%title%%`, etc.) are skipped. If a URL-only OG image is stored, the tool attempts to resolve it to a WordPress attachment ID via `attachment_url_to_postid()`.
+
+**Global options** (from `wpseo_social`):
+
+| Yoast option | MU SEO field |
+|---|---|
+| `twitter_site` | `mu_seo_twitter_handle` (options page) |
+| `og_default_image_id` | `mu_seo_default_og_image` (options page) |
+
+### WP-CLI
+
+The migration command requires a site ID, making it safe for multisite use.
+
+```bash
+wp mu-seo migrate-yoast <site-id> [--dry-run] [--post-type=<type>] [--per-page=<n>] [--verbose]
+```
+
+**Arguments:**
+
+| Argument | Description |
+|---|---|
+| `<site-id>` | **Required.** Numeric ID of the site to migrate. |
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `--dry-run` | Preview changes without writing anything. |
+| `--post-type=<type>` | Comma-separated list of post types to migrate. Defaults to all public post types. |
+| `--per-page=<n>` | Batch size for post queries. Default: `100`. |
+| `--verbose` | Print a line for every field action (migrated, conflict, skipped). |
+
+**Examples:**
+
+```bash
+# Dry run on site 2
+wp mu-seo migrate-yoast 2 --dry-run
+
+# Migrate only posts and pages on site 5
+wp mu-seo migrate-yoast 5 --post-type=post,page
+
+# Full migration with per-field output
+wp mu-seo migrate-yoast 3 --verbose
+```
+
+**Verbose output example:**
+
+```
+Post 42:
+  mu_seo_title:                  migrated → My Page Title
+  mu_seo_description:            skipped (conflict)
+  mu_seo_canonical:              skipped (empty or variable)
+  mu_seo_robots:                 migrated → noindex
+  mu_seo_og_image:               migrated → attachment 187
+Options:
+  mu_seo_twitter_handle:         migrated → @MarshallU
+  mu_seo_default_og_image:       skipped (empty)
+Success: Done. Posts: 3 migrated, 1 skipped conflicts, ...
+```
+
+### Admin UI
+
+The migration tool is also available at **Tools > MU SEO Migration**. It runs the same migration logic without any options — all public post types, no dry run. Results are shown on the same page after completion.
+
+---
+
 ## Development
 
 ```bash
@@ -282,6 +394,7 @@ mu-seo/
 │   ├── class-mu-seo-head.php       # Outputs title, description, robots, canonical
 │   ├── class-mu-seo-options.php    # ACF options page (Settings > SEO Settings)
 │   ├── class-mu-seo-social.php     # Outputs OG and Twitter Card tags
-│   └── class-mu-seo-schema.php     # Outputs JSON-LD schema
+│   ├── class-mu-seo-schema.php     # Outputs JSON-LD schema
+│   └── class-mu-seo-migrate.php    # Yoast SEO migration (WP-CLI + admin UI)
 └── composer.json
 ```

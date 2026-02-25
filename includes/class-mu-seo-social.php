@@ -143,7 +143,17 @@ class MU_SEO_Social {
 			return $type;
 		}
 
-		return 'article';
+		$default = is_singular( 'post' ) ? 'article' : 'website';
+
+		/**
+		 * Filters the default og:type for the current post.
+		 *
+		 * @param string $default  The default type ('article' or 'website').
+		 * @param int    $post_id  The current post ID.
+		 */
+		return sanitize_key(
+			(string) apply_filters( 'mu_seo_og_type', $default, get_the_ID() )
+		);
 	}
 
 	/**

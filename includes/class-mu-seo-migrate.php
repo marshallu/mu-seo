@@ -45,6 +45,11 @@ class MU_SEO_Migrate {
 	/**
 	 * Migrate Yoast SEO data into MU SEO ACF fields.
 	 *
+	 * ## ARGUMENTS
+	 *
+	 * <site-id>
+	 * : The numeric ID of the site to migrate (required for multisite).
+	 *
 	 * ## OPTIONS
 	 *
 	 * [--dry-run]
@@ -56,16 +61,31 @@ class MU_SEO_Migrate {
 	 * [--per-page=<n>]
 	 * : Number of posts to process per batch (default: 100).
 	 *
+	 * [--verbose]
+	 * : Print a line for every field action (migrated, conflict, skipped).
+	 *
 	 * ## EXAMPLES
 	 *
-	 *     wp mu-seo migrate-yoast --dry-run
-	 *     wp mu-seo migrate-yoast --post-type=post,page
+	 *     wp mu-seo migrate-yoast 2 --dry-run
+	 *     wp mu-seo migrate-yoast 5 --post-type=post,page
+	 *     wp mu-seo migrate-yoast 3 --verbose
 	 *
 	 * @param array $args       Positional arguments.
 	 * @param array $assoc_args Associative arguments.
 	 */
 	public function cli_migrate_yoast( $args, $assoc_args ) {
+		if ( empty( $args[0] ) ) {
+			WP_CLI::error( 'Please provide a site ID as the first argument.' );
+		}
+
+		$site_id = absint( $args[0] );
+
+		if ( ! get_site( $site_id ) ) {
+			WP_CLI::error( sprintf( 'Site ID %d does not exist.', $site_id ) );
+		}
+
 		$dry_run  = isset( $assoc_args['dry-run'] );
+		$verbose  = isset( $assoc_args['verbose'] );
 		$per_page = isset( $assoc_args['per-page'] ) ? absint( $assoc_args['per-page'] ) : 100;
 
 		if ( isset( $assoc_args['post-type'] ) ) {
@@ -78,20 +98,25 @@ class MU_SEO_Migrate {
 			WP_CLI::line( 'Dry run — no data will be written.' );
 		}
 
+		switch_to_blog( $site_id );
+
 		$post_stats = $this->run_posts(
 			array(
 				'dry_run'    => $dry_run,
 				'post_types' => $post_types,
 				'per_page'   => $per_page,
 				'cli_output' => true,
+				'verbose'    => $verbose,
 			)
 		);
 
-		$option_stats = $this->run_options( $dry_run );
+		if ( $verbose ) {
+			WP_CLI::line( 'Options:' );
+		}
 
-		$total_migrated = $post_stats['migrated'] + $option_stats['migrated'];
-		$total_skipped  = $post_stats['skipped_empty'] + $post_stats['skipped_conflict']
-			+ $option_stats['skipped_empty'] + $option_stats['skipped_conflict'];
+		$option_stats = $this->run_options( $dry_run, $verbose );
+
+		restore_current_blog();
 
 		WP_CLI::success(
 			sprintf(
@@ -204,6 +229,7 @@ class MU_SEO_Migrate {
 	 *     @type array  $post_types Post types to include. Default all public.
 	 *     @type int    $per_page   Batch size. Default 100.
 	 *     @type bool   $cli_output Whether to emit per-post WP_CLI lines. Default false.
+	 *     @type bool   $verbose    Whether to emit per-field WP_CLI lines. Default false.
 	 * }
 	 * @return array { migrated: int, skipped_conflict: int, skipped_empty: int }
 	 */
@@ -211,6 +237,7 @@ class MU_SEO_Migrate {
 		$dry_run    = ! empty( $args['dry_run'] );
 		$per_page   = isset( $args['per_page'] ) ? absint( $args['per_page'] ) : 100;
 		$cli_output = ! empty( $args['cli_output'] );
+		$verbose    = ! empty( $args['verbose'] );
 
 		if ( ! empty( $args['post_types'] ) ) {
 			$post_types = $args['post_types'];
@@ -253,7 +280,12 @@ class MU_SEO_Migrate {
 				$stats['skipped_conflict'] += $post_stats['skipped_conflict'];
 				$stats['skipped_empty']    += $post_stats['skipped_empty'];
 
-				if ( $cli_output && ( $post_stats['migrated'] > 0 || $post_stats['skipped_conflict'] > 0 ) ) {
+				if ( $verbose && ! empty( $post_stats['log'] ) ) {
+					WP_CLI::line( sprintf( 'Post %d:', $post_id ) );
+					foreach ( $post_stats['log'] as $entry ) {
+						WP_CLI::line( sprintf( '  %-30s %s', $entry['field'] . ':', $entry['status'] ) );
+					}
+				} elseif ( $cli_output && ( $post_stats['migrated'] > 0 || $post_stats['skipped_conflict'] > 0 ) ) {
 					WP_CLI::line(
 						sprintf(
 							'Post %d — migrated: %d, skipped conflicts: %d, skipped empty: %d',
@@ -279,9 +311,10 @@ class MU_SEO_Migrate {
 	 * Migrate Yoast global options (wpseo_social) into MU SEO ACF option fields.
 	 *
 	 * @param bool $dry_run Whether to skip writing.
+	 * @param bool $verbose Whether to emit per-field WP_CLI lines.
 	 * @return array { migrated: int, skipped_conflict: int, skipped_empty: int }
 	 */
-	public function run_options( $dry_run ) {
+	public function run_options( $dry_run, $verbose = false ) {
 		$stats = array(
 			'migrated'         => 0,
 			'skipped_conflict' => 0,
@@ -296,14 +329,18 @@ class MU_SEO_Migrate {
 			$existing = get_field( 'mu_seo_twitter_handle', 'option' );
 			if ( ! empty( $existing ) ) {
 				++$stats['skipped_conflict'];
+				$this->verbose_line( $verbose, 'mu_seo_twitter_handle', 'skipped (conflict)' );
 			} elseif ( ! $dry_run ) {
 				update_field( 'mu_seo_twitter_handle', sanitize_text_field( $twitter_site ), 'option' );
 				++$stats['migrated'];
+				$this->verbose_line( $verbose, 'mu_seo_twitter_handle', 'migrated → ' . $twitter_site );
 			} else {
 				++$stats['migrated'];
+				$this->verbose_line( $verbose, 'mu_seo_twitter_handle', 'would migrate → ' . $twitter_site );
 			}
 		} else {
 			++$stats['skipped_empty'];
+			$this->verbose_line( $verbose, 'mu_seo_twitter_handle', 'skipped (empty or variable)' );
 		}
 
 		// Default OG image (attachment ID).
@@ -312,14 +349,18 @@ class MU_SEO_Migrate {
 			$existing = get_field( 'mu_seo_default_og_image', 'option' );
 			if ( ! empty( $existing ) ) {
 				++$stats['skipped_conflict'];
+				$this->verbose_line( $verbose, 'mu_seo_default_og_image', 'skipped (conflict)' );
 			} elseif ( ! $dry_run ) {
 				update_field( 'mu_seo_default_og_image', $og_image_id, 'option' );
 				++$stats['migrated'];
+				$this->verbose_line( $verbose, 'mu_seo_default_og_image', 'migrated → attachment ' . $og_image_id );
 			} else {
 				++$stats['migrated'];
+				$this->verbose_line( $verbose, 'mu_seo_default_og_image', 'would migrate → attachment ' . $og_image_id );
 			}
 		} else {
 			++$stats['skipped_empty'];
+			$this->verbose_line( $verbose, 'mu_seo_default_og_image', 'skipped (empty)' );
 		}
 
 		return $stats;
@@ -330,13 +371,14 @@ class MU_SEO_Migrate {
 	 *
 	 * @param int  $post_id Post ID.
 	 * @param bool $dry     Whether to skip writing.
-	 * @return array { migrated: int, skipped_conflict: int, skipped_empty: int }
+	 * @return array { migrated: int, skipped_conflict: int, skipped_empty: int, log: array }
 	 */
 	public function migrate_post( $post_id, $dry ) {
 		$stats = array(
 			'migrated'         => 0,
 			'skipped_conflict' => 0,
 			'skipped_empty'    => 0,
+			'log'              => array(),
 		);
 
 		// --- Text fields ---
@@ -350,14 +392,31 @@ class MU_SEO_Migrate {
 			$value = $this->yoast_value( $post_id, $yoast_key );
 			if ( '' === $value ) {
 				++$stats['skipped_empty'];
+				$stats['log'][] = array(
+					'field'  => $acf_field,
+					'status' => 'skipped (empty or variable)',
+				);
 				continue;
 			}
 			if ( $this->mu_seo_has_value( $post_id, $acf_field ) ) {
 				++$stats['skipped_conflict'];
+				$stats['log'][] = array(
+					'field'  => $acf_field,
+					'status' => 'skipped (conflict)',
+				);
 				continue;
 			}
 			if ( ! $dry ) {
 				update_field( $acf_field, sanitize_text_field( $value ), $post_id );
+				$stats['log'][] = array(
+					'field'  => $acf_field,
+					'status' => 'migrated → ' . $value,
+				);
+			} else {
+				$stats['log'][] = array(
+					'field'  => $acf_field,
+					'status' => 'would migrate → ' . $value,
+				);
 			}
 			++$stats['migrated'];
 		}
@@ -370,6 +429,10 @@ class MU_SEO_Migrate {
 			$existing_robots = get_field( 'mu_seo_robots', $post_id );
 			if ( ! empty( $existing_robots ) ) {
 				++$stats['skipped_conflict'];
+				$stats['log'][] = array(
+					'field'  => 'mu_seo_robots',
+					'status' => 'skipped (conflict)',
+				);
 			} else {
 				$robots = array();
 				if ( '1' === $noindex ) {
@@ -380,6 +443,15 @@ class MU_SEO_Migrate {
 				}
 				if ( ! $dry ) {
 					update_field( 'mu_seo_robots', $robots, $post_id );
+					$stats['log'][] = array(
+						'field'  => 'mu_seo_robots',
+						'status' => 'migrated → ' . implode( ', ', $robots ),
+					);
+				} else {
+					$stats['log'][] = array(
+						'field'  => 'mu_seo_robots',
+						'status' => 'would migrate → ' . implode( ', ', $robots ),
+					);
 				}
 				++$stats['migrated'];
 			}
@@ -391,9 +463,22 @@ class MU_SEO_Migrate {
 		if ( $og_image_id > 0 ) {
 			if ( $this->mu_seo_has_value( $post_id, 'mu_seo_og_image' ) ) {
 				++$stats['skipped_conflict'];
+				$stats['log'][] = array(
+					'field'  => 'mu_seo_og_image',
+					'status' => 'skipped (conflict)',
+				);
 			} else {
 				if ( ! $dry ) {
 					update_field( 'mu_seo_og_image', $og_image_id, $post_id );
+					$stats['log'][] = array(
+						'field'  => 'mu_seo_og_image',
+						'status' => 'migrated → attachment ' . $og_image_id,
+					);
+				} else {
+					$stats['log'][] = array(
+						'field'  => 'mu_seo_og_image',
+						'status' => 'would migrate → attachment ' . $og_image_id,
+					);
 				}
 				++$stats['migrated'];
 			}
@@ -405,17 +490,38 @@ class MU_SEO_Migrate {
 				if ( $resolved_id > 0 ) {
 					if ( $this->mu_seo_has_value( $post_id, 'mu_seo_og_image' ) ) {
 						++$stats['skipped_conflict'];
+						$stats['log'][] = array(
+							'field'  => 'mu_seo_og_image',
+							'status' => 'skipped (conflict)',
+						);
 					} else {
 						if ( ! $dry ) {
 							update_field( 'mu_seo_og_image', $resolved_id, $post_id );
+							$stats['log'][] = array(
+								'field'  => 'mu_seo_og_image',
+								'status' => 'migrated → attachment ' . $resolved_id . ' (resolved from URL)',
+							);
+						} else {
+							$stats['log'][] = array(
+								'field'  => 'mu_seo_og_image',
+								'status' => 'would migrate → attachment ' . $resolved_id . ' (resolved from URL)',
+							);
 						}
 						++$stats['migrated'];
 					}
 				} else {
 					++$stats['skipped_empty'];
+					$stats['log'][] = array(
+						'field'  => 'mu_seo_og_image',
+						'status' => 'skipped (URL could not be resolved to attachment)',
+					);
 				}
 			} elseif ( ! empty( $og_image_url ) ) {
 					++$stats['skipped_empty'];
+					$stats['log'][] = array(
+						'field'  => 'mu_seo_og_image',
+						'status' => 'skipped (empty or variable)',
+					);
 			}
 		}
 
@@ -464,5 +570,18 @@ class MU_SEO_Migrate {
 	 */
 	public function contains_yoast_variable( $value ) {
 		return false !== strpos( $value, '%%' );
+	}
+
+	/**
+	 * Emit a WP_CLI line for an option field action when verbose mode is on.
+	 *
+	 * @param bool   $verbose Whether verbose mode is enabled.
+	 * @param string $field   ACF field name.
+	 * @param string $status  Human-readable status string.
+	 */
+	private function verbose_line( $verbose, $field, $status ) {
+		if ( $verbose ) {
+			WP_CLI::line( sprintf( '  %-30s %s', $field . ':', $status ) );
+		}
 	}
 }

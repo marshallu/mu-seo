@@ -19,7 +19,8 @@ class MU_SEO_Head {
 	 */
 	public function __construct() {
 		add_filter( 'pre_get_document_title', array( $this, 'filter_document_title' ) );
-		add_action( 'wp_head', array( $this, 'output_meta_tags' ) );
+		add_action( 'wp_head', array( $this, 'output_meta_tags' ), 2 );
+		remove_action( 'wp_head', 'rel_canonical' );
 	}
 
 	/**
