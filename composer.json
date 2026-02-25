@@ -1,0 +1,26 @@
+{
+	"name": "marshallu/mu-seo",
+	"description": "This is a lean SEO plugin for Marshall University.",
+	"keywords": ["wordpress", "plugin"],
+	"homepage": "https://github.com/marshallu/mu-seo",
+	"license": "MIT",
+	"type": "wordpress-plugin",
+	"require-dev": {
+		"squizlabs/php_codesniffer": "@stable",
+		"wp-coding-standards/wpcs": "^3.1",
+		"dealerdirect/phpcodesniffer-composer-installer": "^0.7.1",
+		"php-stubs/acf-pro-stubs": "^6.0",
+		"phpstan/phpstan": "^2.1",
+		"szepeviktor/phpstan-wordpress": "^2.0"
+	},
+	"config": {
+		"allow-plugins": {
+			"dealerdirect/phpcodesniffer-composer-installer": true
+		}
+	},
+	 "scripts": {
+		"format": "phpcbf  --extensions=php --standard=phpcs.xml.dist --report-summary --report-source",
+		"lint": "phpcs --extensions=php --standard=phpcs.xml.dist",
+		"analyse": "phpstan analyse --memory-limit=4G"
+	}
+}
