@@ -40,8 +40,20 @@ class MU_SEO_Schema {
 		} elseif ( is_page() ) {
 			$schema = $this->build_webpage_schema( $post_id );
 		} else {
-			return;
+			$schema = array();
 		}
+
+		/**
+		 * Filter the JSON-LD schema object before output.
+		 *
+		 * Use this hook to add schema for custom post types, modify existing
+		 * schema properties, or suppress output by returning an empty array.
+		 *
+		 * @param array  $schema    The schema array. Empty for unhandled post types.
+		 * @param int    $post_id   The current post ID.
+		 * @param string $post_type The current post type slug.
+		 */
+		$schema = apply_filters( 'mu_seo_schema', $schema, $post_id, get_post_type( $post_id ) );
 
 		if ( empty( $schema ) ) {
 			return;
