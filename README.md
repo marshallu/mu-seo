@@ -18,6 +18,7 @@ A lean SEO plugin for Marshall University's WordPress sites.
 - JSON-LD schema markup for posts (Article) and pages (WebPage)
 - `mu_seo_schema` filter for adding or modifying schema on custom post types
 - `mu_seo_og_type` filter for overriding the OG type on custom post types
+- `mu_seo_og_image_id` filter for providing a social image on custom post types
 - Yoast SEO migration tool (WP-CLI command + admin UI)
 
 ---
@@ -94,7 +95,8 @@ When resolving the image for `og:image`, `twitter:image`, and JSON-LD schema, th
 1. **Post-level ACF override** — `mu_seo_og_image` field on the post
 2. **Featured image** — `get_post_thumbnail_id()`
 3. **Hero block image** — parsed from the first `acf/hero` block in post content (see below)
-4. **Site default** — `mu_seo_default_og_image` from the options page
+4. **`mu_seo_og_image_id` filter** — lets themes/plugins provide an image for custom post types
+5. **Site default** — `mu_seo_default_og_image` from the options page
 
 If no image is found, the image tags are omitted entirely.
 
@@ -212,6 +214,33 @@ Remove a post type:
 add_filter( 'mu_seo_post_types', function( $post_types ) {
     return array_diff( $post_types, array( 'attachment' ) );
 } );
+```
+
+---
+
+### `mu_seo_og_image_id`
+
+Filters the resolved social image attachment ID after the built-in fallback chain (ACF override → featured image → hero block) and before the site-wide default. Use this to provide a post-type-specific image source for CPTs that don't use featured images or the hero block.
+
+The filter receives the ID resolved so far — return it unchanged to pass through, or return a different attachment ID to override.
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `$image_id` | `int` | Attachment ID resolved so far, or `0` if nothing found yet. |
+| `$post_id` | `int` | The current post ID. |
+
+**Example** — use a custom ACF field as the social image for a profiles CPT:
+
+```php
+add_filter( 'mu_seo_og_image_id', function( $image_id, $post_id ) {
+    if ( $image_id || ! is_singular( 'mu_profile' ) ) {
+        return $image_id;
+    }
+    $headshot = get_field( 'profile_headshot', $post_id );
+    return $headshot ? absint( $headshot ) : $image_id;
+}, 10, 2 );
 ```
 
 ---

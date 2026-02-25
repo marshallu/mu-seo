@@ -187,7 +187,8 @@ class MU_SEO_Social {
 	 *   1. Post-level ACF og image override
 	 *   2. Featured image
 	 *   3. Hero block image (acf/hero)
-	 *   4. Site default from options page
+	 *   4. mu_seo_og_image_id filter (custom post types, etc.)
+	 *   5. Site default from options page
 	 *
 	 * @param int $post_id Post ID.
 	 * @return array { url: string, width: int, height: int, alt: string }
@@ -214,7 +215,19 @@ class MU_SEO_Social {
 			$image_id = $this->get_hero_block_image( $post_id );
 		}
 
-		// 4. Site default.
+		// 4. Filter — lets themes/plugins provide an image for custom post types.
+		/**
+		 * Filters the resolved social image attachment ID before the site default is applied.
+		 *
+		 * Receives the ID resolved so far (0 if nothing found yet). Return a non-zero
+		 * attachment ID to use it, or return the existing value to leave it unchanged.
+		 *
+		 * @param int $image_id The attachment ID resolved so far, or 0.
+		 * @param int $post_id  The current post ID.
+		 */
+		$image_id = absint( apply_filters( 'mu_seo_og_image_id', $image_id, $post_id ) );
+
+		// 5. Site default.
 		if ( ! $image_id ) {
 			$default = get_field( 'mu_seo_default_og_image', 'option' );
 			if ( $default ) {
