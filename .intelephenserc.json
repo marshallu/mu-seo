@@ -1,0 +1,15 @@
+{
+  "stubs": [
+    "wordpress",
+    "wp-cli"
+  ],
+  "files": {
+    "exclude": [
+      "**/vendor/squizlabs/**",
+      "**/vendor/wp-coding-standards/**",
+      "**/vendor/dealerdirect/**",
+      "**/vendor/phpstan/**",
+      "**/vendor/szepeviktor/**"
+    ]
+  }
+}

@@ -50,6 +50,7 @@ class MU_SEO {
 		require_once plugin_dir_path( __FILE__ ) . 'class-mu-seo-options.php';
 		require_once plugin_dir_path( __FILE__ ) . 'class-mu-seo-social.php';
 		require_once plugin_dir_path( __FILE__ ) . 'class-mu-seo-schema.php';
+		require_once plugin_dir_path( __FILE__ ) . 'class-mu-seo-migrate.php';
 	}
 
 	/**
@@ -68,5 +69,8 @@ class MU_SEO {
 		new MU_SEO_Options();
 		new MU_SEO_Social();
 		new MU_SEO_Schema();
+		$migrate = new MU_SEO_Migrate();
+		$migrate->register_cli();
+		$migrate->register_admin_hooks();
 	}
 }
