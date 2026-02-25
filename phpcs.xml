@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<ruleset name="MU SEO">
+    <description>WordPress Coding Standards for MU SEO.</description>
+
+    <rule ref="WordPress"/>
+
+    <file>.</file>
+    <exclude-pattern>vendor/*</exclude-pattern>
+
+    <arg name="extensions" value="php"/>
+    <arg name="colors"/>
+    <arg value="sp"/>
+</ruleset>

@@ -164,6 +164,38 @@ The following tags are output in `wp_head` on singular pages only. Nothing is ou
 
 ## Developer Hooks
 
+### `mu_seo_post_types`
+
+Filters the list of post types that receive the SEO and Social field group. The default is all post types registered with `public => true`. Use this to add post types with a UI but no public archive, or to remove post types that should not have SEO fields.
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `$post_types` | `string[]` | Array of post type slugs. |
+
+**Examples:**
+
+Add a non-public CPT:
+
+```php
+add_filter( 'mu_seo_post_types', function( $post_types ) {
+    $post_types[] = 'faculty';
+    $post_types[] = 'program';
+    return $post_types;
+} );
+```
+
+Remove a post type:
+
+```php
+add_filter( 'mu_seo_post_types', function( $post_types ) {
+    return array_diff( $post_types, array( 'attachment' ) );
+} );
+```
+
+---
+
 ### `mu_seo_schema`
 
 Filters the JSON-LD schema array before it is encoded and output. Runs on every singular page. For unhandled post types (not `post` or `page`) the initial `$schema` value is an empty array, giving you a clean slate to build from.

@@ -148,7 +148,7 @@ class MU_SEO_Fields {
 	}
 
 	/**
-	 * Build ACF location rules for all public post types.
+	 * Build ACF location rules for the enabled post types.
 	 *
 	 * Each post type becomes its own OR group so the field group
 	 * appears on every post type edit screen.
@@ -157,6 +157,17 @@ class MU_SEO_Fields {
 	 */
 	private function get_location_rules() {
 		$post_types = get_post_types( array( 'public' => true ), 'names' );
+
+		/**
+		 * Filter the post types that receive the SEO and Social field group.
+		 *
+		 * By default all public post types are included. Use this filter to
+		 * add post types that have show_ui => true but public => false, or to
+		 * remove post types that should not have SEO fields.
+		 *
+		 * @param string[] $post_types Array of post type slugs.
+		 */
+		$post_types = apply_filters( 'mu_seo_post_types', $post_types );
 		$location   = array();
 
 		foreach ( $post_types as $post_type ) {
