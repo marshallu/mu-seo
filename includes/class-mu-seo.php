@@ -47,6 +47,8 @@ class MU_SEO {
 	private function includes() {
 		require_once plugin_dir_path( __FILE__ ) . 'class-mu-seo-fields.php';
 		require_once plugin_dir_path( __FILE__ ) . 'class-mu-seo-head.php';
+		require_once plugin_dir_path( __FILE__ ) . 'class-mu-seo-options.php';
+		require_once plugin_dir_path( __FILE__ ) . 'class-mu-seo-social.php';
 	}
 
 	/**
@@ -62,5 +64,7 @@ class MU_SEO {
 	public function init() {
 		new MU_SEO_Fields();
 		new MU_SEO_Head();
+		new MU_SEO_Options();
+		new MU_SEO_Social();
 	}
 }
