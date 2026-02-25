@@ -72,6 +72,21 @@ class MU_SEO_Fields {
 						'placeholder'  => '',
 					),
 					array(
+						'key'           => 'field_mu_seo_robots',
+						'label'         => 'Robots',
+						'name'          => 'mu_seo_robots',
+						'type'          => 'checkbox',
+						'instructions'  => 'Override the default crawler directives for this page. Leave unchecked to allow normal indexing and link-following.',
+						'required'      => 0,
+						'choices'       => array(
+							'noindex'  => 'noindex — prevent search engines from indexing this page',
+							'nofollow' => 'nofollow — prevent search engines from following links on this page',
+						),
+						'layout'        => 'vertical',
+						'toggle'        => 0,
+						'return_format' => 'value',
+					),
+					array(
 						'key'   => 'field_mu_seo_tab_social',
 						'label' => 'Social / Open Graph',
 						'name'  => '',

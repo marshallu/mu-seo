@@ -43,7 +43,7 @@ class MU_SEO_Head {
 	}
 
 	/**
-	 * Output meta description and canonical link tags.
+	 * Output meta description, robots, and canonical link tags.
 	 */
 	public function output_meta_tags() {
 		if ( ! is_singular() ) {
@@ -51,12 +51,20 @@ class MU_SEO_Head {
 		}
 
 		$description = $this->get_seo_description();
+		$robots      = $this->get_robots_directives();
 		$canonical   = $this->get_canonical_url();
 
 		if ( $description ) {
 			printf(
 				'<meta name="description" content="%s">' . "\n",
 				esc_attr( $description )
+			);
+		}
+
+		if ( $robots ) {
+			printf(
+				'<meta name="robots" content="%s">' . "\n",
+				esc_attr( $robots )
 			);
 		}
 
@@ -92,6 +100,31 @@ class MU_SEO_Head {
 		}
 
 		return sanitize_text_field( (string) get_field( 'mu_seo_description' ) );
+	}
+
+	/**
+	 * Get the robots meta content string for the current post.
+	 *
+	 * Returns a comma-separated list of checked directives (e.g. "noindex,nofollow"),
+	 * or an empty string when no directives are set.
+	 *
+	 * @return string
+	 */
+	private function get_robots_directives() {
+		if ( ! function_exists( 'get_field' ) ) {
+			return '';
+		}
+
+		$directives = get_field( 'mu_seo_robots' );
+
+		if ( empty( $directives ) || ! is_array( $directives ) ) {
+			return '';
+		}
+
+		$allowed    = array( 'noindex', 'nofollow' );
+		$directives = array_intersect( $directives, $allowed );
+
+		return implode( ',', $directives );
 	}
 
 	/**
