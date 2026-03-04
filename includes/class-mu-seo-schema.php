@@ -35,6 +35,16 @@ class MU_SEO_Schema {
 			return;
 		}
 
+		// If a custom schema block is provided, output it directly and bail.
+		if ( function_exists( 'get_field' ) ) {
+			$custom_schema = get_field( 'mu_page_schema', $post_id );
+
+			if ( $custom_schema ) {
+				echo wp_kses( $custom_schema, array( 'script' => array( 'type' => true ) ) ) . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+				return;
+			}
+		}
+
 		if ( is_singular( 'post' ) ) {
 			$schema = $this->build_article_schema( $post_id );
 		} elseif ( is_page() ) {
