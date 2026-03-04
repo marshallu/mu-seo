@@ -148,7 +148,7 @@ class MU_SEO_Fields {
 						'label'        => 'Custom Schema',
 						'name'         => 'mu_page_schema',
 						'type'         => 'textarea',
-						'instructions' => 'Paste the full JSON-LD <script> block provided by your marketing team. The code will be output as-is in the page <head>.',
+						'instructions' => 'Paste the full JSON-LD <script> block. The code will be output as-is in the page <head>.',
 						'required'     => 0,
 						'rows'         => 10,
 						'new_lines'    => '',
