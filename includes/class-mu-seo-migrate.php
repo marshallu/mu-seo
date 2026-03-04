@@ -47,10 +47,13 @@ class MU_SEO_Migrate {
 	 *
 	 * ## ARGUMENTS
 	 *
-	 * <site-id>
-	 * : The numeric ID of the site to migrate (required for multisite).
+	 * [<site-id>]
+	 * : The numeric ID of the site to migrate. Required unless --all-sites is used.
 	 *
 	 * ## OPTIONS
+	 *
+	 * [--all-sites]
+	 * : Migrate every site on the network where Yoast SEO is active.
 	 *
 	 * [--dry-run]
 	 * : Preview changes without writing anything.
@@ -69,19 +72,17 @@ class MU_SEO_Migrate {
 	 *     wp mu-seo migrate-yoast 2 --dry-run
 	 *     wp mu-seo migrate-yoast 5 --post-type=post,page
 	 *     wp mu-seo migrate-yoast 3 --verbose
+	 *     wp mu-seo migrate-yoast --all-sites --dry-run
+	 *     wp mu-seo migrate-yoast --all-sites --verbose
 	 *
 	 * @param array $args       Positional arguments.
 	 * @param array $assoc_args Associative arguments.
 	 */
 	public function cli_migrate_yoast( $args, $assoc_args ) {
-		if ( empty( $args[0] ) ) {
-			WP_CLI::error( 'Please provide a site ID as the first argument.' );
-		}
+		$all_sites = isset( $assoc_args['all-sites'] );
 
-		$site_id = absint( $args[0] );
-
-		if ( ! get_site( $site_id ) ) {
-			WP_CLI::error( sprintf( 'Site ID %d does not exist.', $site_id ) );
+		if ( ! $all_sites && empty( $args[0] ) ) {
+			WP_CLI::error( 'Please provide a site ID as the first argument, or use --all-sites.' );
 		}
 
 		$dry_run  = isset( $assoc_args['dry-run'] );
@@ -98,36 +99,132 @@ class MU_SEO_Migrate {
 			WP_CLI::line( 'Dry run — no data will be written.' );
 		}
 
-		switch_to_blog( $site_id );
+		if ( $all_sites ) {
+			$site_ids = $this->get_yoast_active_site_ids();
 
-		$post_stats = $this->run_posts(
-			array(
-				'dry_run'    => $dry_run,
-				'post_types' => $post_types,
-				'per_page'   => $per_page,
-				'cli_output' => true,
-				'verbose'    => $verbose,
-			)
-		);
+			if ( empty( $site_ids ) ) {
+				WP_CLI::warning( 'No sites found with Yoast SEO active.' );
+				return;
+			}
 
-		if ( $verbose ) {
-			WP_CLI::line( 'Options:' );
+			WP_CLI::line( sprintf( 'Found %d site(s) with Yoast SEO active.', count( $site_ids ) ) );
+		} else {
+			$site_id = absint( $args[0] );
+
+			if ( ! get_site( $site_id ) ) {
+				WP_CLI::error( sprintf( 'Site ID %d does not exist.', $site_id ) );
+			}
+
+			$site_ids = array( $site_id );
 		}
 
-		$option_stats = $this->run_options( $dry_run, $verbose );
+		$run_args = array(
+			'dry_run'    => $dry_run,
+			'post_types' => $post_types,
+			'per_page'   => $per_page,
+			'cli_output' => true,
+			'verbose'    => $verbose,
+		);
 
-		restore_current_blog();
+		$totals = array(
+			'post_migrated'         => 0,
+			'post_skipped_conflict' => 0,
+			'post_skipped_empty'    => 0,
+			'opt_migrated'          => 0,
+			'opt_skipped'           => 0,
+		);
+
+		foreach ( $site_ids as $site_id ) {
+			if ( $all_sites ) {
+				WP_CLI::line( sprintf( '--- Site %d ---', $site_id ) );
+			}
+
+			switch_to_blog( $site_id );
+
+			$post_stats = $this->run_posts( $run_args );
+
+			if ( $verbose ) {
+				WP_CLI::line( 'Options:' );
+			}
+
+			$option_stats = $this->run_options( $dry_run, $verbose );
+
+			restore_current_blog();
+
+			if ( $all_sites ) {
+				WP_CLI::line(
+					sprintf(
+						'Site %d — posts: %d migrated, %d conflicts, %d empty/vars. Options: %d migrated, %d skipped.',
+						$site_id,
+						$post_stats['migrated'],
+						$post_stats['skipped_conflict'],
+						$post_stats['skipped_empty'],
+						$option_stats['migrated'],
+						$option_stats['skipped_empty'] + $option_stats['skipped_conflict']
+					)
+				);
+			}
+
+			$totals['post_migrated']         += $post_stats['migrated'];
+			$totals['post_skipped_conflict'] += $post_stats['skipped_conflict'];
+			$totals['post_skipped_empty']    += $post_stats['skipped_empty'];
+			$totals['opt_migrated']          += $option_stats['migrated'];
+			$totals['opt_skipped']           += $option_stats['skipped_empty'] + $option_stats['skipped_conflict'];
+		}
 
 		WP_CLI::success(
 			sprintf(
 				'Done. Posts: %d migrated, %d skipped conflicts, %d skipped empty/variables. Options: %d migrated, %d skipped.',
-				$post_stats['migrated'],
-				$post_stats['skipped_conflict'],
-				$post_stats['skipped_empty'],
-				$option_stats['migrated'],
-				$option_stats['skipped_empty'] + $option_stats['skipped_conflict']
+				$totals['post_migrated'],
+				$totals['post_skipped_conflict'],
+				$totals['post_skipped_empty'],
+				$totals['opt_migrated'],
+				$totals['opt_skipped']
 			)
 		);
+	}
+
+	/**
+	 * Return the IDs of all network sites where Yoast SEO is active.
+	 *
+	 * @return int[]
+	 */
+	private function get_yoast_active_site_ids() {
+		// Ensure is_plugin_active() is available outside the admin context.
+		if ( ! function_exists( 'is_plugin_active' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
+
+		$yoast_slugs = array(
+			'wordpress-seo/wp-seo.php',
+			'wordpress-seo-premium/wp-seo-premium.php',
+		);
+
+		$sites = get_sites(
+			array(
+				'number'   => 0,
+				'spam'     => 0,
+				'deleted'  => 0,
+				'archived' => 0,
+			)
+		);
+
+		$active_ids = array();
+
+		foreach ( $sites as $site ) {
+			switch_to_blog( $site->blog_id );
+
+			foreach ( $yoast_slugs as $slug ) {
+				if ( is_plugin_active( $slug ) ) {
+					$active_ids[] = (int) $site->blog_id;
+					break;
+				}
+			}
+
+			restore_current_blog();
+		}
+
+		return $active_ids;
 	}
 
 	// -------------------------------------------------------------------------
