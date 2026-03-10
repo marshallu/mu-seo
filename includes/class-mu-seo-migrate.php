@@ -48,12 +48,14 @@ class MU_SEO_Migrate {
 	 * ## ARGUMENTS
 	 *
 	 * [<site-id>]
-	 * : The numeric ID of the site to migrate. Required unless --all-sites is used.
+	 * : (Multisite only) The numeric ID of the site to migrate. Required on
+	 *   multisite unless --all-sites is used. Ignored on non-multisite.
 	 *
 	 * ## OPTIONS
 	 *
 	 * [--all-sites]
 	 * : Migrate every site on the network where Yoast SEO is active.
+	 *   On non-multisite, equivalent to running without arguments.
 	 *
 	 * [--dry-run]
 	 * : Preview changes without writing anything.
@@ -69,6 +71,12 @@ class MU_SEO_Migrate {
 	 *
 	 * ## EXAMPLES
 	 *
+	 *     # Non-multisite
+	 *     wp mu-seo migrate-yoast
+	 *     wp mu-seo migrate-yoast --dry-run
+	 *     wp mu-seo migrate-yoast --post-type=post,page
+	 *
+	 *     # Multisite
 	 *     wp mu-seo migrate-yoast 2 --dry-run
 	 *     wp mu-seo migrate-yoast 5 --post-type=post,page
 	 *     wp mu-seo migrate-yoast 3 --verbose
@@ -79,9 +87,10 @@ class MU_SEO_Migrate {
 	 * @param array $assoc_args Associative arguments.
 	 */
 	public function cli_migrate_yoast( $args, $assoc_args ) {
-		$all_sites = isset( $assoc_args['all-sites'] );
+		$all_sites    = isset( $assoc_args['all-sites'] );
+		$is_multisite = is_multisite();
 
-		if ( ! $all_sites && empty( $args[0] ) ) {
+		if ( $is_multisite && ! $all_sites && empty( $args[0] ) ) {
 			WP_CLI::error( 'Please provide a site ID as the first argument, or use --all-sites.' );
 		}
 
@@ -107,15 +116,24 @@ class MU_SEO_Migrate {
 				return;
 			}
 
-			WP_CLI::line( sprintf( 'Found %d site(s) with Yoast SEO active.', count( $site_ids ) ) );
-		} else {
+			if ( $is_multisite ) {
+				WP_CLI::line( sprintf( 'Found %d site(s) with Yoast SEO active.', count( $site_ids ) ) );
+			}
+		} elseif ( ! empty( $args[0] ) ) {
 			$site_id = absint( $args[0] );
 
-			if ( ! get_site( $site_id ) ) {
+			if ( $is_multisite && ! get_site( $site_id ) ) {
 				WP_CLI::error( sprintf( 'Site ID %d does not exist.', $site_id ) );
 			}
 
-			$site_ids = array( $site_id );
+			if ( ! $is_multisite ) {
+				WP_CLI::warning( 'Site ID argument is ignored on non-multisite installations.' );
+			}
+
+			$site_ids = array( $is_multisite ? $site_id : get_current_blog_id() );
+		} else {
+			// Non-multisite with no arguments: migrate the single site.
+			$site_ids = array( get_current_blog_id() );
 		}
 
 		$run_args = array(
@@ -135,11 +153,13 @@ class MU_SEO_Migrate {
 		);
 
 		foreach ( $site_ids as $site_id ) {
-			if ( $all_sites ) {
+			if ( $is_multisite && $all_sites ) {
 				WP_CLI::line( sprintf( '--- Site %d ---', $site_id ) );
 			}
 
-			switch_to_blog( $site_id );
+			if ( $is_multisite ) {
+				switch_to_blog( $site_id );
+			}
 
 			$post_stats = $this->run_posts( $run_args );
 
@@ -149,9 +169,11 @@ class MU_SEO_Migrate {
 
 			$option_stats = $this->run_options( $dry_run, $verbose );
 
-			restore_current_blog();
+			if ( $is_multisite ) {
+				restore_current_blog();
+			}
 
-			if ( $all_sites ) {
+			if ( $is_multisite && $all_sites ) {
 				WP_CLI::line(
 					sprintf(
 						'Site %d — posts: %d migrated, %d conflicts, %d empty/vars. Options: %d migrated, %d skipped.',
@@ -185,7 +207,11 @@ class MU_SEO_Migrate {
 	}
 
 	/**
-	 * Return the IDs of all network sites where Yoast SEO is active.
+	 * Return the IDs of all sites where Yoast SEO is active.
+	 *
+	 * On non-multisite, returns the current blog ID if Yoast is active,
+	 * or an empty array if it is not. On multisite, scans every non-archived,
+	 * non-deleted, non-spam site on the network.
 	 *
 	 * @return int[]
 	 */
@@ -199,6 +225,15 @@ class MU_SEO_Migrate {
 			'wordpress-seo/wp-seo.php',
 			'wordpress-seo-premium/wp-seo-premium.php',
 		);
+
+		if ( ! is_multisite() ) {
+			foreach ( $yoast_slugs as $slug ) {
+				if ( is_plugin_active( $slug ) ) {
+					return array( get_current_blog_id() );
+				}
+			}
+			return array();
+		}
 
 		$sites = get_sites(
 			array(
